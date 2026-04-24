@@ -26,6 +26,7 @@ let waterCount = 0;
 const waterGoal = 8;
 let cameraStream = null;
 let hasUploadedPhoto = false;
+let selectedPhotoDataUrl = "";
 let notes = [];
 let favorites = [];
 let weightEntries = [];
@@ -649,11 +650,26 @@ function closeAiChat() {
   aiPanel.hidden = true;
 }
 
-function sendAiPrompt(text) {
+async function sendAiPrompt(text) {
   const clean = text.trim();
   if (!clean) return;
-  aiMessages = [...aiMessages, { id: Date.now(), role: "user", text: clean, createdAt: Date.now() }];
-  aiMessages = [...aiMessages, { id: Date.now() + 1, role: "assistant", text: buildAiReply(clean), createdAt: Date.now() }].slice(-40);
+
+  const pendingId = Date.now() + 1;
+  aiMessages = [
+    ...aiMessages,
+    { id: Date.now(), role: "user", text: clean, createdAt: Date.now() },
+    { id: pendingId, role: "assistant", text: "Думаю над ответом...", createdAt: Date.now() },
+  ].slice(-40);
+  saveAiMessages();
+  renderAiChat();
+
+  try {
+    const data = await postAi({ type: "chat", message: clean });
+    aiMessages = aiMessages.map((message) => message.id === pendingId ? { ...message, text: data.reply } : message);
+  } catch {
+    aiMessages = aiMessages.map((message) => message.id === pendingId ? { ...message, text: buildAiReply(clean) + "\n\nСейчас это запасной ответ: настоящий AI не подключился. Проверь OPENAI_API_KEY в Vercel." } : message);
+  }
+
   saveAiMessages();
   renderAiChat();
 }
@@ -756,7 +772,56 @@ function formatNoteDate(timestamp) {
 }
 
 function escapeHtml(value) {
-  return String(value).replace(/[&<>"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" })[char]);
+  return String(value).replace(/[&<>\"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" })[char]);
+}
+
+function foodLensContext() {
+  return {
+    dailyGoal,
+    totals: getDailyTotals(),
+    water: { count: waterCount, goal: waterGoal },
+    profile,
+    diary,
+    notes,
+    weightEntries,
+  };
+}
+
+async function postAi(payload) {
+  const response = await fetch("/api/ai", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...payload, context: foodLensContext() }),
+  });
+
+  if (!response.ok) throw new Error("AI request failed");
+  const data = await response.json();
+  if (!data.ok) throw new Error(data.error || "AI недоступен");
+  return data;
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("Не удалось прочитать фото"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function captureCameraFrame() {
+  if (!cameraFeed.videoWidth || !cameraFeed.videoHeight) return "";
+  const canvas = document.createElement("canvas");
+  canvas.width = cameraFeed.videoWidth;
+  canvas.height = cameraFeed.videoHeight;
+  const context = canvas.getContext("2d");
+  context.drawImage(cameraFeed, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/jpeg", 0.86);
+}
+
+async function analyzeMealWithAi({ imageDataUrl = "", description = "" } = {}) {
+  const data = await postAi({ type: "food", imageDataUrl, description });
+  return data.meal;
 }
 
 function renderNotes() {
@@ -945,17 +1010,27 @@ async function scanFood() {
     await startCamera();
   }
 
+  scanButton.disabled = true;
   scanButton.classList.add("loading");
   scanButton.textContent = "Анализирую...";
   cameraStatus.textContent = "AI оценивает блюдо и порцию";
 
-  setTimeout(() => {
+  try {
+    const imageDataUrl = selectedPhotoDataUrl || captureCameraFrame();
+    const meal = await analyzeMealWithAi({ imageDataUrl });
+    currentMeal = meal;
+    resetPortion();
+    renderMeal();
+    cameraStatus.textContent = meal.note || "Готово, можно сохранить в дневник";
+  } catch {
     pickDemoMeal();
+    cameraStatus.textContent = "AI пока недоступен, показан демо-результат";
+  } finally {
+    scanButton.disabled = false;
     scanButton.classList.remove("loading");
     scanButton.innerHTML = '<span class="scan-dot"></span>Сканировать еду';
-    cameraStatus.textContent = "Готово, можно сохранить в дневник";
     stopCamera();
-  }, 900);
+  }
 }
 
 
@@ -1050,15 +1125,31 @@ manualTypeButtons.forEach((button) => {
     renderManualType();
   });
 });
-manualSave.addEventListener("click", () => {
-  const meal = estimateManualMeal(manualInput.value);
-  if (!meal) return;
-  diary = [{ ...meal, type: currentManualType }, ...diary];
+manualSave.addEventListener("click", async () => {
+  const description = manualInput.value.trim();
+  if (!description) return;
+
+  manualSave.disabled = true;
+  manualSave.textContent = "AI считает...";
+
+  try {
+    const meal = await analyzeMealWithAi({ description });
+    diary = [{ ...meal, type: currentManualType }, ...diary];
+    cameraStatus.textContent = "Добавлено с AI-расчетом";
+  } catch {
+    const meal = estimateManualMeal(description);
+    if (!meal) return;
+    diary = [{ ...meal, type: currentManualType }, ...diary];
+    cameraStatus.textContent = "AI недоступен, добавлено демо-расчетом";
+  } finally {
+    manualSave.disabled = false;
+    manualSave.textContent = "Добавить в дневник";
+  }
+
   manualInput.value = "";
   renderManualPreview();
   renderDiary();
   closeManual();
-  cameraStatus.textContent = "Добавлено вручную";
   TelegramApp?.HapticFeedback?.notificationOccurred("success");
 });
 
@@ -1152,10 +1243,11 @@ notesList.addEventListener("click", (event) => {
   renderNotes();
 });
 
-photoInput.addEventListener("change", () => {
+photoInput.addEventListener("change", async () => {
   if (!photoInput.files?.[0]) return;
   stopCamera();
   hasUploadedPhoto = true;
+  selectedPhotoDataUrl = await readFileAsDataUrl(photoInput.files[0]);
   const imageUrl = URL.createObjectURL(photoInput.files[0]);
   cameraPlaceholder.style.display = "block";
   cameraPlaceholder.innerHTML = `<img src="${imageUrl}" alt="" class="uploaded-photo" />`;

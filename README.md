@@ -19,6 +19,15 @@ The simplest path is Vercel:
 3. Deploy with default settings.
 4. Copy the generated HTTPS URL.
 
+## AI setup
+
+Add these environment variables in Vercel Project Settings:
+
+- `OPENAI_API_KEY` - your OpenAI API key.
+- `OPENAI_MODEL` - optional, defaults to `gpt-4.1-mini`.
+
+FoodLens calls `/api/ai` from the browser. The OpenAI key stays only on the server side and is not exposed to users.
+
 ## Telegram setup
 
 1. Open `@BotFather`.
