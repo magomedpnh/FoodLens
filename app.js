@@ -24,6 +24,8 @@ let selectedDate = new Date();
 let selectedDateKey = "";
 let waterCount = 0;
 const waterGoal = 8;
+let cameraStream = null;
+let hasUploadedPhoto = false;
 let notes = [];
 let favorites = [];
 let weightEntries = [];
@@ -703,19 +705,36 @@ function renderDiary() {
 }
 
 async function startCamera() {
+  if (cameraStream) return true;
+
   if (!navigator.mediaDevices?.getUserMedia) {
     cameraStatus.textContent = "Камера недоступна, можно выбрать фото";
-    return;
+    return false;
   }
 
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+    cameraStream = stream;
     cameraFeed.srcObject = stream;
     cameraFeed.classList.add("active");
     cameraPlaceholder.style.display = "none";
     cameraStatus.textContent = "Наведи камеру на еду";
+    return true;
   } catch {
     cameraStatus.textContent = "Камера не открылась, включен демо-режим";
+    return false;
+  }
+}
+
+function stopCamera() {
+  if (!cameraStream) return;
+  cameraStream.getTracks().forEach((track) => track.stop());
+  cameraStream = null;
+  cameraFeed.srcObject = null;
+  cameraFeed.classList.remove("active");
+  if (!hasUploadedPhoto) {
+    cameraPlaceholder.style.display = "grid";
+    cameraStatus.textContent = "Камера выключена";
   }
 }
 
@@ -921,7 +940,11 @@ function pickDemoMeal() {
   renderMeal();
 }
 
-function scanFood() {
+async function scanFood() {
+  if (!hasUploadedPhoto) {
+    await startCamera();
+  }
+
   scanButton.classList.add("loading");
   scanButton.textContent = "Анализирую...";
   cameraStatus.textContent = "AI оценивает блюдо и порцию";
@@ -931,6 +954,7 @@ function scanFood() {
     scanButton.classList.remove("loading");
     scanButton.innerHTML = '<span class="scan-dot"></span>Сканировать еду';
     cameraStatus.textContent = "Готово, можно сохранить в дневник";
+    stopCamera();
   }, 900);
 }
 
@@ -1130,6 +1154,8 @@ notesList.addEventListener("click", (event) => {
 
 photoInput.addEventListener("change", () => {
   if (!photoInput.files?.[0]) return;
+  stopCamera();
+  hasUploadedPhoto = true;
   const imageUrl = URL.createObjectURL(photoInput.files[0]);
   cameraPlaceholder.style.display = "block";
   cameraPlaceholder.innerHTML = `<img src="${imageUrl}" alt="" class="uploaded-photo" />`;
@@ -1181,4 +1207,3 @@ renderMeal();
 renderMealType();
 renderManualType();
 renderDiary();
-startCamera();
