@@ -630,47 +630,19 @@ function buildAiReply(question) {
 }
 
 function renderAiChat() {
-  if (!aiMessages.length) aiMessages = [{ id: Date.now(), role: "assistant", text: makeAiGreeting(), createdAt: Date.now() }];
-
-  aiChatList.innerHTML = aiMessages.map((message) => {
-    const role = message.role === "user" ? "user" : "assistant";
-    const label = role === "user" ? "Ты" : "FoodLens AI";
-    return '<article class="ai-message ' + role + '"><span>' + label + '</span><p>' + escapeHtml(message.text) + '</p></article>';
-  }).join("");
-  aiChatList.scrollTop = aiChatList.scrollHeight;
+  aiChatList.innerHTML = '<article class="ai-soon-card"><span class="ai-soon-badge">Soon</span><h3>ИИ-помощник скоро откроется</h3><p>Мы готовим умный чат по питанию: разбор дневника, советы по белку, воде, весу и следующему приему пищи.</p><small>Пока можно пользоваться дневником, водой, весом, любимыми блюдами и ручным добавлением еды.</small></article>';
 }
 
 function openAiChat() {
   renderAiChat();
   aiPanel.hidden = false;
-  setTimeout(() => aiInput.focus(), 80);
 }
 
 function closeAiChat() {
   aiPanel.hidden = true;
 }
 
-async function sendAiPrompt(text) {
-  const clean = text.trim();
-  if (!clean) return;
-
-  const pendingId = Date.now() + 1;
-  aiMessages = [
-    ...aiMessages,
-    { id: Date.now(), role: "user", text: clean, createdAt: Date.now() },
-    { id: pendingId, role: "assistant", text: "Думаю над ответом...", createdAt: Date.now() },
-  ].slice(-40);
-  saveAiMessages();
-  renderAiChat();
-
-  try {
-    const data = await postAi({ type: "chat", message: clean });
-    aiMessages = aiMessages.map((message) => message.id === pendingId ? { ...message, text: data.reply } : message);
-  } catch {
-    aiMessages = aiMessages.map((message) => message.id === pendingId ? { ...message, text: buildAiReply(clean) + "\n\nСейчас это запасной ответ: настоящий AI не подключился. Проверь OPENAI_API_KEY в Vercel." } : message);
-  }
-
-  saveAiMessages();
+async function sendAiPrompt() {
   renderAiChat();
 }
 

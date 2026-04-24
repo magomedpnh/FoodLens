@@ -216,23 +216,30 @@
         <div class="section-header">
           <div>
             <p class="eyebrow">FoodLens</p>
-            <h2>ИИ чат</h2>
+            <h2>ИИ скоро</h2>
           </div>
           <button class="close-button" id="aiClose" type="button" aria-label="Закрыть">×</button>
         </div>
 
-        <div class="ai-chat-list" id="aiChatList"></div>
+        <div class="ai-chat-list ai-soon-list" id="aiChatList">
+          <article class="ai-soon-card">
+            <span class="ai-soon-badge">Soon</span>
+            <h3>ИИ-помощник скоро откроется</h3>
+            <p>Мы готовим умный чат по питанию: разбор дневника, советы по белку, воде, весу и следующему приему пищи.</p>
+            <small>Пока можно пользоваться дневником, водой, весом, любимыми блюдами и ручным добавлением еды.</small>
+          </article>
+        </div>
 
-        <div class="ai-quick-actions" aria-label="Быстрые вопросы">
+        <div class="ai-quick-actions" aria-label="Быстрые вопросы" hidden>
           <button type="button" data-ai-prompt="Разбери мой день по еде">Разбор дня</button>
           <button type="button" data-ai-prompt="Что лучше съесть дальше?">Что съесть?</button>
           <button type="button" data-ai-prompt="Как добрать белок?">Добрать белок</button>
           <button type="button" data-ai-prompt="Помоги не сорваться">Не сорваться</button>
         </div>
 
-        <form class="ai-chat-form" id="aiChatForm">
-          <input id="aiInput" type="text" placeholder="Спроси про еду, диету или цель" autocomplete="off" />
-          <button type="submit" aria-label="Отправить">➜</button>
+        <form class="ai-chat-form" id="aiChatForm" hidden>
+          <input id="aiInput" type="text" placeholder="Спроси про еду, диету или цель" autocomplete="off" disabled />
+          <button type="submit" aria-label="Отправить" disabled>➜</button>
         </form>
       </div>
     </section>
